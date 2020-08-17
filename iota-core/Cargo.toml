@@ -10,10 +10,24 @@ license = "MIT"
 name = "iota"
 
 [dependencies]
-bee-transaction = { git = "https://github.com/Alex6323/bee-p.git" }
+bee-transaction = { git = "https://github.com/Alex6323/bee-p.git", rev="926c0e01cf974adf7a3b1488093106388f90923d" }
+# bee-transaction = { path = "../../bee-p/bee-transaction" }
+# bee-ternary = "0.3.1-alpha"
 bee-ternary = { version = "0.3.1-alpha", git = "https://github.com/iotaledger/bee.git", features = ["serde1"] }
-bee-signing = { git = "https://github.com/iotaledger/bee.git" }
-bee-crypto = { git = "https://github.com/iotaledger/bee.git" }
+bee-signing = { version = "0.1.0-alpha", git = "https://github.com/iotaledger/bee.git" }
+bee-crypto = { version = "0.1.0-alpha",git = "https://github.com/iotaledger/bee.git",  rev = "6ad15f92fee283726a68276f55b23a5da637c308" }
+
+
+# # bee-transaction = { git = "https://github.com/Alex6323/bee-p.git" }
+# bee-transaction = { path = "../../bee-p/bee-transaction" }
+# # bee-ternary = { version = "0.3.1-alpha", git = "https://github.com/iotaledger/bee.git", features = ["serde1"] }
+# bee-ternary = "0.3.1-alpha"
+# # bee-signing = { path = "../../bee-p/bee-signing" }
+# # bee-signing = { git = "https://github.com/iotaledger/bee.git" }
+# bee-signing = "0.1.0-alpha"
+# # bee-crypto = { path = "../../bee-p/bee-crypto"  }
+# bee-crypto = "0.1.0-alpha"
+# # bee-crypto = { git = "https://github.com/iotaledger/bee.git" }
 iota-client = { version = "0.5.0-alpha", path = "../iota-client" }
 
 #[features]
