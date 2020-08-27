@@ -13,9 +13,9 @@ name = "iota"
 bee-transaction = { git = "https://github.com/Alex6323/bee-p.git", rev="926c0e01cf974adf7a3b1488093106388f90923d" }
 # bee-transaction = { path = "../../bee-p/bee-transaction" }
 # bee-ternary = "0.3.1-alpha"
-bee-ternary = { version = "0.3.1-alpha", git = "https://github.com/iotaledger/bee.git", features = ["serde1"] }
-bee-signing = { version = "0.1.0-alpha", git = "https://github.com/iotaledger/bee.git" }
-bee-crypto = {version = "0.1.0-alpha", git = "https://github.com/iotaledger/bee.git" }
+bee-ternary = { version = "0.3.1-alpha", git = "https://github.com/iotaledger/bee.git", features = ["serde1"], branch = "dev" }
+bee-signing = { version = "0.1.0-alpha", git = "https://github.com/iotaledger/bee.git", branch = "dev" }
+bee-crypto = {version = "0.1.0-alpha", git = "https://github.com/iotaledger/bee.git", branch = "dev"}
 
 # # bee-transaction = { git = "https://github.com/Alex6323/bee-p.git" }
 # bee-transaction = { path = "../../bee-p/bee-transaction" }
