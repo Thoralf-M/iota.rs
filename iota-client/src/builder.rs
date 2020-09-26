@@ -3,6 +3,7 @@
 use crate::client::Client;
 use crate::error::*;
 
+use async_std::task;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use std::sync::{Arc, RwLock};
@@ -78,7 +79,7 @@ impl ClientBuilder {
     }
 
     /// Build the Client instance.
-    pub fn build(self) -> Result<Client> {
+    pub async fn build(self) -> Result<Client> {
         if self.nodes.len() == 0 {
             return Err(Error::MissingNode);
         }
@@ -109,16 +110,19 @@ impl ClientBuilder {
         };
 
         let mut sync = client.clone();
-        smol::block_on(async { sync.sync().await });
-
-        std::thread::spawn(move || {
-            smol::block_on(async {
-                loop {
-                    smol::Timer::after(std::time::Duration::from_secs(180)).await;
-                    sync.sync().await;
-                }
-            })
-        });
+        task::block_on(async move { sync.sync().await });
+        let mut sync = client.clone();
+        sync.sync().await;
+        // let mut sync = client.clone();
+        // // std::thread::spawn(move || {
+        //     task::spawn(move || {
+        //     task::block_on(async move {
+        //         loop {
+        //             task::sleep(Duration::from_secs(180)).await;
+        //             sync.clone().sync().await;
+        //         }
+        //     })
+        // });
 
         Ok(client)
     }

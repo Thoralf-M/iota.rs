@@ -5,5 +5,5 @@ members = [
     "examples",
 
     #"bindings/c",
-    #"bindings/wasm",
+    "bindings/wasm",
 ]
