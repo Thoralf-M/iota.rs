@@ -79,7 +79,7 @@ impl ClientBuilder {
     }
 
     /// Build the Client instance.
-    pub async fn build(self) -> Result<Client> {
+    pub fn build(self) -> Result<Client> {
         if self.nodes.len() == 0 {
             return Err(Error::MissingNode);
         }
@@ -111,8 +111,8 @@ impl ClientBuilder {
 
         let mut sync = client.clone();
         task::block_on(async move { sync.sync().await });
-        let mut sync = client.clone();
-        sync.sync().await;
+        // let mut sync = client.clone();
+        // sync.sync().await;
         // let mut sync = client.clone();
         // // std::thread::spawn(move || {
         //     task::spawn(move || {

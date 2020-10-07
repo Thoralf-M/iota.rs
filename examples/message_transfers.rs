@@ -49,7 +49,10 @@ async fn main() -> Result<()> {
 
     // Create a client instance
     let iota = iota::ClientBuilder::new()
-        .node("https://nodes.comnet.thetangle.org")?
+        .nodes(&vec![
+            "http://localhost:14265",
+            "https://nodes.comnet.thetangle.org",
+        ])?
         .build()?;
     // Call send_transfers api
     // Below is just a dummy seed which just serves as an example.
