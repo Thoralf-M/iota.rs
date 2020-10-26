@@ -99,7 +99,7 @@ impl Client {
     pub(crate) fn get_node(&self) -> Result<Url> {
         // TODO getbalance, isconfirmed and were_addresses_spent_from should do quorum mode
         Ok(self
-            .sync
+            .pool
             .read()
             .unwrap()
             .iter()

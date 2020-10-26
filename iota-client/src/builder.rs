@@ -109,8 +109,8 @@ impl ClientBuilder {
             quorum_threshold,
         };
 
-        let mut sync = client.clone();
-        task::block_on(async move { sync.sync().await });
+        // let mut sync = client.clone();
+        // task::block_on(async move { sync.sync().await });
         // let mut sync = client.clone();
         // sync.sync().await;
         // let mut sync = client.clone();
