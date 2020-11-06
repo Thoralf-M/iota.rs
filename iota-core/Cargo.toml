@@ -11,10 +11,10 @@ name = "iota"
 # path = "lib.rs"
 
 [dependencies]
-bee-transaction = { git = "https://github.com/Alex6323/bee-p.git", rev = "9bc04bac0e8393a3ba34dd1fed245150691963cc" }
-bee-ternary = { version = "0.3.3-alpha", git = "https://github.com/iotaledger/bee.git", branch = "dev", features = ["serde1"] }
-bee-signing = { git = "https://github.com/iotaledger/bee.git", branch = "dev" }
-bee-crypto = { git = "https://github.com/iotaledger/bee.git", branch = "dev" }
+bee-transaction = { git = "https://github.com/Thoralf-M/bee-p.git", rev = "babcd69b2f75799649ef2d41e1db77bebde35e3b" }
+bee-ternary = { version = "0.3.2-alpha", git = "https://github.com/Thoralf-M/bee.git", branch = "dev", features = ["serde1"] }
+bee-signing = { git = "https://github.com/Thoralf-M/bee.git", branch = "dev" }
+bee-crypto = { git = "https://github.com/Thoralf-M/bee.git", branch = "dev" }
 iota-client = { version = "0.5.0-alpha", path = "../iota-client" }
 
 [features]
