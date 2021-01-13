@@ -1,7 +1,7 @@
 // Copyright 2020 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
-//! Builder of the Clinet Instnace
+//! Builder of the client instance
 
 use crate::{client::*, error::*};
 
@@ -21,10 +21,8 @@ const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 pub enum Network {
     /// Mainnet
     Mainnet,
-    /// Devnet
-    Devnet,
-    /// Comnet
-    Comnet,
+    /// Any network that is not the mainnet
+    Testnet,
 }
 
 /// Builder to construct client instance with sensible default values
@@ -46,7 +44,7 @@ impl Default for ClientBuilder {
             nodes: HashSet::new(),
             node_sync_interval: Duration::from_millis(60000),
             node_sync_enabled: true,
-            network: Network::Mainnet,
+            network: Network::Testnet,
             #[cfg(feature = "mqtt")]
             broker_options: Default::default(),
             local_pow: true,
@@ -57,33 +55,20 @@ impl Default for ClientBuilder {
 }
 
 impl ClientBuilder {
-    /// Create an Iota client builder
+    /// Creates an IOTA client builder.
     pub fn new() -> Self {
         Default::default()
     }
 
-    /// Add a Iota node
-    pub fn node(mut self, url: &str) -> Result<Self> {
+    /// Adds an IOTA node by its URL.
+    pub fn with_node(mut self, url: &str) -> Result<Self> {
         let url = Url::parse(url).map_err(|_| Error::UrlError)?;
         self.nodes.insert(url);
         Ok(self)
     }
 
-    /// Set the node sync interval
-    pub fn node_sync_interval(mut self, node_sync_interval: Duration) -> Self {
-        self.node_sync_interval = node_sync_interval;
-        self
-    }
-
-    /// Disables the node syncing process.
-    /// Every node will be considered healthy and ready to use.
-    pub fn disable_node_sync(mut self) -> Self {
-        self.node_sync_enabled = false;
-        self
-    }
-
-    /// Add a list of Iota nodes
-    pub fn nodes(mut self, urls: &[&str]) -> Result<Self> {
+    /// Adds a list of IOTA nodes by their URLs.
+    pub fn with_nodes(mut self, urls: &[&str]) -> Result<Self> {
         for url in urls {
             let url = Url::parse(url).map_err(|_| Error::UrlError)?;
             self.nodes.insert(url);
@@ -91,45 +76,60 @@ impl ClientBuilder {
         Ok(self)
     }
 
+    /// Set the node sync interval
+    pub fn with_node_sync_interval(mut self, node_sync_interval: Duration) -> Self {
+        self.node_sync_interval = node_sync_interval;
+        self
+    }
+
+    /// Disables the node syncing process.
+    /// Every node will be considered healthy and ready to use.
+    pub fn with_node_sync_disabled(mut self) -> Self {
+        self.node_sync_enabled = false;
+        self
+    }
+
     // TODO node pool
 
-    /// Network of the Iota nodes belong to
-    pub fn network(mut self, network: Network) -> Self {
+    /// Selects the type of network the added nodes belong to.
+    pub fn with_network(mut self, network: Network) -> Self {
         self.network = network;
         self
     }
 
     /// Sets the MQTT broker options.
     #[cfg(feature = "mqtt")]
-    pub fn broker_options(mut self, options: BrokerOptions) -> Self {
+    pub fn with_mqtt_broker_options(mut self, options: BrokerOptions) -> Self {
         self.broker_options = options;
         self
     }
 
-    /// Whether the PoW should be local or remote
-    pub fn local_pow(mut self, local: bool) -> Self {
+    /// Sets whether the PoW should be done locally or remotely.
+    pub fn with_local_pow(mut self, local: bool) -> Self {
         self.local_pow = local;
         self
     }
 
     /// Sets the request timeout.
-    pub fn request_timeout(mut self, timeout: Duration) -> Self {
+    pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
         self.request_timeout = timeout;
         self
     }
 
     /// Sets the request timeout for a specific API usage.
-    pub fn api_timeout(mut self, api: Api, timeout: Duration) -> Self {
+    pub fn with_api_timeout(mut self, api: Api, timeout: Duration) -> Self {
         self.api_timeout.insert(api, timeout);
         self
     }
 
     /// Build the Client instance.
-    pub fn build(self) -> Result<Client> {
+    pub fn finish(self) -> Result<Client> {
         if self.nodes.is_empty() {
             return Err(Error::MissingParameter(String::from("Iota node")));
         }
 
+        let local_pow = self.local_pow;
+        let network = self.network;
         let nodes = self.nodes;
         let node_sync_interval = self.node_sync_interval;
 
@@ -139,8 +139,16 @@ impl ClientBuilder {
             let (sync_kill_sender, sync_kill_receiver) = channel(1);
             let runtime = std::thread::spawn(move || {
                 let mut runtime = Runtime::new().unwrap();
-                runtime.block_on(Client::sync_nodes(&sync_, &nodes));
-                Client::start_sync_process(&runtime, sync_, nodes, node_sync_interval, sync_kill_receiver);
+                runtime.block_on(Client::sync_nodes(&sync_, &nodes, local_pow, network.clone()));
+                Client::start_sync_process(
+                    &runtime,
+                    sync_,
+                    nodes,
+                    node_sync_interval,
+                    local_pow,
+                    network,
+                    sync_kill_receiver,
+                );
                 runtime
             })
             .join()

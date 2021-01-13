@@ -7,16 +7,16 @@ use bee_message::prelude::*;
 use bee_signing_ext::Seed;
 
 use iota_client::MessageJson;
-use std::{convert::TryInto, num::NonZeroU64, str::FromStr};
+use std::{convert::TryInto, str::FromStr};
 
 const DEFAULT_NODE_URL: &str = "http://0.0.0.0:14265";
 
 // Sends a full message object to the node with already computed nonce. Serves as a test object.
 async fn setup_indexation_message() -> MessageId {
-    let client = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let client = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap();
     let data = r#"
     {
@@ -51,10 +51,10 @@ async fn test_get_health() {
 #[tokio::test]
 #[ignore]
 async fn test_get_tips() {
-    let r = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let r = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap()
         .get_tips()
         .await
@@ -65,17 +65,17 @@ async fn test_get_tips() {
 #[tokio::test]
 #[ignore]
 async fn test_post_message_with_indexation() {
-    let client = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let client = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap();
 
     let r = client
         .send()
-        .indexation("Hello".to_string())
-        .data("Tangle".to_string().as_bytes().to_vec())
-        .post()
+        .with_index("Hello")
+        .with_data("Tangle".to_string().as_bytes().to_vec())
+        .finish()
         .await
         .unwrap();
 
@@ -85,10 +85,10 @@ async fn test_post_message_with_indexation() {
 #[tokio::test]
 #[ignore]
 async fn test_post_message_with_transaction() {
-    let iota = iota_client::Client::builder() // Crate a client instance builder
-        .node(DEFAULT_NODE_URL) // Insert the node here
+    let iota = iota_client::Client::build() // Crate a client instance builder
+        .with_node(DEFAULT_NODE_URL) // Insert the node here
         .unwrap()
-        .build()
+        .finish()
         .unwrap();
 
     // Insert your seed. Since the output amount cannot be zero. The seed must contain non-zero balance.
@@ -99,15 +99,14 @@ async fn test_post_message_with_transaction() {
 
     let message_id = iota
         .send()
-        .transaction(&seed)
-        .account_index(0)
+        .with_seed(&seed)
         // Insert the output address and ampunt to spent. The amount cannot be zero.
-        .output_hex(
+        .with_output_hex(
             "5eec99d6ee4ba21aa536c3364bbf2b587cb98a7f2565b75d948b10083e2143f8", // Insert the address to search for
-            NonZeroU64::new(100).unwrap(),
+            100,
         )
         .unwrap()
-        .post()
+        .finish()
         .await
         .unwrap();
     println!("Message ID: {:?}", message_id);
@@ -117,10 +116,10 @@ async fn test_post_message_with_transaction() {
 #[ignore]
 async fn test_get_message_by_index() {
     setup_indexation_message().await;
-    let r = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let r = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap()
         .get_message()
         .index("HORNET Spammer")
@@ -133,10 +132,10 @@ async fn test_get_message_by_index() {
 #[tokio::test]
 #[ignore]
 async fn test_get_message_data() {
-    let client = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let client = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap();
     let message_id = setup_indexation_message().await;
     let r = client.get_message().data(&message_id).await.unwrap();
@@ -148,10 +147,10 @@ async fn test_get_message_data() {
 async fn test_get_message_metadata() {
     let message_id = setup_indexation_message().await;
 
-    let r = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let r = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap()
         .get_message()
         .metadata(&message_id)
@@ -165,10 +164,10 @@ async fn test_get_message_metadata() {
 #[ignore]
 async fn test_get_message_raw() {
     let message_id = setup_indexation_message().await;
-    iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap()
         .get_message()
         .raw(&message_id)
@@ -180,10 +179,10 @@ async fn test_get_message_raw() {
 #[ignore]
 async fn test_get_message_children() {
     let message_id = setup_indexation_message().await;
-    iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap()
         .get_message()
         .children(&message_id)
@@ -194,18 +193,13 @@ async fn test_get_message_children() {
 #[tokio::test]
 #[ignore]
 async fn test_get_address_balance() {
-    let r = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let r = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap()
         .get_address()
-        .balance(
-            &("6920b176f613ec7be59e68fc68f597eb3393af80f74c7c3db78198147d5f1f92"
-                .parse::<Ed25519Address>()
-                .unwrap())
-            .into(),
-        )
+        .balance(&"iot1qxt0nhsf38nh6rs4p6zs5knqp6psgha9wsv74uajqgjmwc75ugupxgecea4".into())
         .await
         .unwrap();
 
@@ -215,17 +209,15 @@ async fn test_get_address_balance() {
 #[tokio::test]
 #[ignore]
 async fn test_get_address_outputs() {
-    let r = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let r = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap()
         .get_address()
         .outputs(
-            &("d2adf03c21269b25a0bb4319471213161f2a4fb57b16cc2e505b87b2ca52d37d"
-                .parse::<Ed25519Address>()
-                .unwrap())
-            .into(), // Insert the address to search for
+            &"iot1qxt0nhsf38nh6rs4p6zs5knqp6psgha9wsv74uajqgjmwc75ugupxgecea4".into(), /* Insert the address to
+                                                                                        * search for */
         )
         .await
         .unwrap();
@@ -236,10 +228,10 @@ async fn test_get_address_outputs() {
 #[tokio::test]
 #[ignore]
 async fn test_get_output() {
-    let r = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let r = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap()
         .get_output(
             &UTXOInput::new(
@@ -257,12 +249,12 @@ async fn test_get_output() {
 #[tokio::test]
 #[ignore]
 async fn test_get_milestone() {
-    let r = iota_client::Client::builder()
-        .node(DEFAULT_NODE_URL)
+    let r = iota_client::Client::build()
+        .with_node(DEFAULT_NODE_URL)
         .unwrap()
-        .build()
+        .finish()
         .unwrap()
-        .get_milestone(50265)
+        .get_milestone(3)
         .await
         .unwrap();
 

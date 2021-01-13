@@ -1,8 +1,15 @@
 // Copyright 2020 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
-//! The Client module to connect through IRI with API usages
-use crate::{api::*, builder::ClientBuilder, error::*, node::*, parse_response, types::*};
+//! The Client module to connect through HORNET or Bee with API usages
+use crate::{
+    api::*,
+    builder::{ClientBuilder, Network},
+    error::*,
+    node::*,
+    parse_response,
+    types::*,
+};
 
 use bee_message::prelude::{Address, Ed25519Address, Message, MessageId, UTXOInput};
 use bee_pow::providers::{MinerBuilder, Provider as PowProvider, ProviderBuilder as PowProviderBuilder};
@@ -55,6 +62,8 @@ pub struct BrokerOptions {
     pub(crate) automatic_disconnect: bool,
     #[serde(default = "default_broker_timeout")]
     pub(crate) timeout: Duration,
+    #[serde(default = "default_use_ws")]
+    pub(crate) use_ws: bool,
 }
 
 #[cfg(feature = "mqtt")]
@@ -68,11 +77,17 @@ fn default_broker_timeout() -> Duration {
 }
 
 #[cfg(feature = "mqtt")]
+fn default_use_ws() -> bool {
+    true
+}
+
+#[cfg(feature = "mqtt")]
 impl Default for BrokerOptions {
     fn default() -> Self {
         Self {
             automatic_disconnect: default_broker_automatic_disconnect(),
             timeout: default_broker_timeout(),
+            use_ws: default_use_ws(),
         }
     }
 }
@@ -93,6 +108,12 @@ impl BrokerOptions {
     /// Sets the timeout used for the MQTT operations.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    /// Decid if websockets or tcp will be used for the connection
+    pub fn use_websockets(mut self, use_ws: bool) -> Self {
+        self.use_ws = use_ws;
         self
     }
 }
@@ -181,7 +202,7 @@ impl FromStr for Api {
     }
 }
 
-/// An instance of the client using IRI URI
+/// An instance of the client using HORNET or Bee URI
 pub struct Client {
     #[allow(dead_code)]
     pub(crate) runtime: Option<Runtime>,
@@ -237,7 +258,7 @@ impl Drop for Client {
 
 impl Client {
     /// Create the builder to instntiate the IOTA Client.
-    pub fn builder() -> ClientBuilder {
+    pub fn build() -> ClientBuilder {
         ClientBuilder::new()
     }
 
@@ -247,6 +268,8 @@ impl Client {
         sync: Arc<RwLock<HashSet<Url>>>,
         nodes: HashSet<Url>,
         node_sync_interval: Duration,
+        local_pow: bool,
+        network: Network,
         mut kill: Receiver<()>,
     ) {
         let node_sync_interval = TokioDuration::from_nanos(node_sync_interval.as_nanos().try_into().unwrap());
@@ -259,7 +282,7 @@ impl Client {
                                 // delay first since the first `sync_nodes` call is made by the builder
                                 // to ensure the node list is filled before the client is used
                                 delay_for(node_sync_interval).await;
-                                Client::sync_nodes(&sync, &nodes).await;
+                                Client::sync_nodes(&sync, &nodes, local_pow, network.clone()).await;
                         } => {}
                         _ = kill.recv() => {}
                     }
@@ -268,13 +291,31 @@ impl Client {
         });
     }
 
-    pub(crate) async fn sync_nodes(sync: &Arc<RwLock<HashSet<Url>>>, nodes: &HashSet<Url>) {
+    pub(crate) async fn sync_nodes(
+        sync: &Arc<RwLock<HashSet<Url>>>,
+        nodes: &HashSet<Url>,
+        local_pow: bool,
+        network: Network,
+    ) {
         let mut synced_nodes = HashSet::new();
 
         for node_url in nodes {
             // Put the healty node url into the synced_nodes
-            if Client::get_node_health(node_url.clone()).await.unwrap_or(false) {
-                synced_nodes.insert(node_url.clone());
+            if let Ok(info) = Client::get_node_info(node_url.clone()).await {
+                if info.is_healthy {
+                    if network == Network::Testnet && info.network_id == "mainnet"
+                        || network == Network::Mainnet && info.network_id != "mainnet"
+                    {
+                        continue;
+                    }
+                    if !local_pow {
+                        if info.features.contains(&"PoW".to_string()) {
+                            synced_nodes.insert(node_url.clone());
+                        }
+                    } else {
+                        synced_nodes.insert(node_url.clone());
+                    }
+                }
             }
         }
 
@@ -432,12 +473,12 @@ impl Client {
 
     /// GET /api/v1/outputs/{outputId} endpoint
     /// Find an output by its transaction_id and corresponding output_index.
-    pub async fn get_output(&self, output: &UTXOInput) -> Result<OutputMetadata> {
+    pub async fn get_output(&self, output_id: &UTXOInput) -> Result<OutputMetadata> {
         let mut url = self.get_node()?;
         url.set_path(&format!(
             "api/v1/outputs/{}{}",
-            output.output_id().transaction_id().to_string(),
-            hex::encode(output.output_id().index().to_le_bytes())
+            output_id.output_id().transaction_id().to_string(),
+            hex::encode(output_id.output_id().index().to_le_bytes())
         ));
         let resp = self
             .client
@@ -468,7 +509,11 @@ impl Client {
     }
     /// Find all outputs based on the requests criteria. This method will try to query multiple nodes if
     /// the request amount exceed individual node limit.
-    pub async fn find_outputs(&self, outputs: &[UTXOInput], addresses: &[Address]) -> Result<Vec<OutputMetadata>> {
+    pub async fn find_outputs(
+        &self,
+        outputs: &[UTXOInput],
+        addresses: &[Bech32Address],
+    ) -> Result<Vec<OutputMetadata>> {
         let mut output_metadata = Vec::<OutputMetadata>::new();
         // Use a `HashSet` to prevent duplicate output.
         let mut output_to_query = HashSet::<UTXOInput>::new();
@@ -592,9 +637,8 @@ impl Client {
         GetAddressesBuilder::new(self, seed)
     }
 
-    /// Find all messages by provided message IDs. This method will try to query multiple nodes
-    /// if the request amount exceed individual node limit.
-    pub async fn find_messages(&self, indexation_keys: &[String], message_ids: &[MessageId]) -> Result<Vec<Message>> {
+    /// Find all messages by provided message IDs.
+    pub async fn find_messages(&self, message_ids: &[MessageId]) -> Result<Vec<Message>> {
         let mut messages = Vec::new();
 
         // Use a `HashSet` to prevent duplicate message_ids.
@@ -603,15 +647,6 @@ impl Client {
         // Collect the `MessageId` in the HashSet.
         for message_id in message_ids {
             message_ids_to_query.insert(message_id.to_owned());
-        }
-
-        // Use `get_message().index()` API to get the message ID first,
-        // then collect the `MessageId` in the HashSet.
-        for index in indexation_keys {
-            let message_ids = self.get_message().index(&index).await?;
-            for message_id in message_ids.iter() {
-                message_ids_to_query.insert(message_id.to_owned());
-            }
         }
 
         // Use `get_message().data()` API to get the `Message`.
@@ -632,10 +667,10 @@ impl Client {
 
     /// Return the balance in iota for the given addresses; No seed or security level needed to do this
     /// since we are only checking and already know the addresses.
-    pub async fn get_address_balances(&self, addresses: &[Address]) -> Result<Vec<AddressBalancePair>> {
+    pub async fn get_address_balances(&self, addresses: &[Bech32Address]) -> Result<Vec<AddressBalancePair>> {
         let mut address_balance_pairs = Vec::new();
         for address in addresses {
-            let balance = self.get_address().balance(address).await?;
+            let balance = self.get_address().balance(&address).await?;
             address_balance_pairs.push(AddressBalancePair {
                 address: address.clone(),
                 balance,
