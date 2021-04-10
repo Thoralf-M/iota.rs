@@ -403,6 +403,8 @@ impl Miner {
     /// The minier which returns the best crackability and mined iteration.
     pub async fn run(
         &mut self,
+        tx: mpsc::Sender<MinerEvent>,
+        mut rx: mpsc::Receiver<MinerEvent>,
         target_crack_probability: Option<f64>,
         threshold: Option<f64>,
     ) -> Result<CrackabilityMinerEvent> {
@@ -413,8 +415,6 @@ impl Miner {
             .with_threshold(threshold.unwrap_or(0.0))
             .with_num_13_free_fragments(self.num_13_free_fragments)
             .finish();
-
-        let (tx, mut rx) = mpsc::channel(self.worker_count);
         let counters = Arc::new(Mutex::new(vec![0; self.worker_count]));
         let crackability = Arc::new(Mutex::new(std::f64::MAX));
         // Use the dummy essence and update in the mining_worker function
@@ -513,10 +513,11 @@ impl Miner {
     /// Run the bundle miner with non-crack-probability stop criteria
     pub async fn run_with_with_non_crack_probability_stop_criteria(
         &mut self,
+        tx: mpsc::Sender<MinerEvent>,
+        mut rx: mpsc::Receiver<MinerEvent>,
         target_hash: TritBuf<T1B1Buf>,
         criterion: impl StopMiningCriteria + std::marker::Send + 'static + Copy,
     ) -> MinerEvent {
-        let (tx, mut rx) = mpsc::channel(self.worker_count);
         let runtime = Builder::new_multi_thread()
             .worker_threads(self.core_thread_count)
             .thread_name("miner")

@@ -128,8 +128,10 @@ pub async fn test_recoverer_run_security_1() {
         .miner(miner)
         .finish()
         .unwrap();
-
-    if let CrackabilityMinerEvent::MinedCrackability(mined_info) = recoverer.recover().await {
+    let (miner_tx, miner_rx) = tokio::sync::mpsc::channel(1);
+    if let CrackabilityMinerEvent::MinedCrackability(mined_info) =
+        recoverer.recover(miner_tx, miner_rx).await
+    {
         assert_eq!(mined_iteration_expected, mined_info.mined_iteration);
         assert_eq!(
             true,
@@ -206,7 +208,10 @@ pub async fn test_recoverer_run_security_2() {
         .finish()
         .unwrap();
 
-    if let CrackabilityMinerEvent::MinedCrackability(mined_info) = recoverer.recover().await {
+    let (miner_tx, miner_rx) = tokio::sync::mpsc::channel(1);
+    if let CrackabilityMinerEvent::MinedCrackability(mined_info) =
+        recoverer.recover(miner_tx, miner_rx).await
+    {
         assert_eq!(mined_iteration_expected, mined_info.mined_iteration);
         assert_eq!(
             true,

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bee_ternary::{T1B1Buf, TritBuf, TryteBuf};
+use futures::future::abortable;
 use iota_bundle_miner::miner::{
     absorb_and_get_normalized_bundle_hash, create_obsolete_tag, increase_essense,
     mining_worker_with_non_crack_probability_stop_criteria, prepare_keccak_384, trit_buf_to_string,
@@ -272,8 +273,11 @@ pub async fn test_miner_equal_target_hash_run() {
         .with_mining_timeout(10)
         .finish()
         .unwrap();
+    let (miner_tx, miner_rx) = tokio::sync::mpsc::channel(5);
     if let MinerEvent::MinedEssence(mined_essence) = miner
         .run_with_with_non_crack_probability_stop_criteria(
+            miner_tx,
+            miner_rx,
             TryteBuf::try_from_str(&target_hash.to_string())
                 .unwrap()
                 .as_trits()
@@ -327,8 +331,11 @@ pub async fn test_miner_less_than_max_hash_run() {
         .with_mining_timeout(10)
         .finish()
         .unwrap();
+    let (miner_tx, miner_rx) = tokio::sync::mpsc::channel(5);
     if let MinerEvent::MinedEssence(mined_essence) = miner
         .run_with_with_non_crack_probability_stop_criteria(
+            miner_tx,
+            miner_rx,
             TryteBuf::try_from_str(&target_hash.to_string())
                 .unwrap()
                 .as_trits()
@@ -365,16 +372,20 @@ pub async fn test_miner_stop() {
                 })
                 .collect::<Vec<TritBuf<T1B1Buf>>>(),
         )
-        .with_mining_timeout(20)
+        .with_mining_timeout(5)
         .finish()
         .unwrap();
 
+    let (miner_tx, miner_rx) = tokio::sync::mpsc::channel(5);
+    let miner_tx_cloned = miner_tx.clone();
     let (tx, mut rx) = tokio::sync::mpsc::channel(2);
     let tx_cloned = tx.clone();
 
-    tokio::spawn(async move {
+    let (abortable_worker, abort_handle) = abortable(tokio::spawn(async move {
         let event = miner
             .run_with_with_non_crack_probability_stop_criteria(
+                miner_tx_cloned,
+                miner_rx,
                 TryteBuf::try_from_str(&target_hash.to_string())
                     .unwrap()
                     .as_trits()
@@ -382,13 +393,21 @@ pub async fn test_miner_stop() {
                 EQUAL_TRAGET_HASH,
             )
             .await;
-        let _ = tx.send(event).await;
+        let _ = tx_cloned.send(event).await;
+    }));
+    tokio::spawn(async move {
+        let _ = abortable_worker.await;
     });
-
-    let _ = tx_cloned.send(MinerEvent::Timeout).await;
-
+    let _ = miner_tx.send(MinerEvent::Timeout).await;
     match rx.recv().await {
-        Some(v) => println!("got = {:?}", v),
+        Some(v) => {
+            println!("got = {:?}", v);
+            abort_handle.abort();
+        }
         _ => println!("the sender dropped"),
     }
+    // while let Some(m) = rx.recv().await {
+    //     println!("got = {:?}", m);
+    //     abort_handle.abort();
+    // }
 }

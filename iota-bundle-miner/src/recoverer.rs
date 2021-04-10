@@ -4,10 +4,11 @@
 use crate::error::{Error, Result};
 use crate::helper::get_max_normalized_bundle_hash;
 use crate::{
-    miner::{CrackabilityMinerEvent, Miner},
+    miner::{CrackabilityMinerEvent, Miner, MinerEvent},
     success,
 };
 use bee_ternary::{t3b1::T3B1Buf, T1B1Buf, TritBuf};
+use tokio::sync::mpsc;
 
 /// CrackProbability estimates the probability that an attacker can successfully crack the given hashes.
 pub fn get_crack_probability(security_level: usize, bundle_hashes: &[TritBuf<T1B1Buf>]) -> f64 {
@@ -95,11 +96,15 @@ impl RecovererBuilder {
 
 impl Recoverer {
     /// Start running mining workers
-    pub async fn recover(&mut self) -> CrackabilityMinerEvent {
+    pub async fn recover(
+        &mut self,
+        tx: mpsc::Sender<MinerEvent>,
+        rx: mpsc::Receiver<MinerEvent>,
+    ) -> CrackabilityMinerEvent {
         let target_crackability =
             get_crack_probability(self.security_level, &self.known_bundle_hashes);
         self.miner
-            .run(Some(target_crackability), Some(self.threshold))
+            .run(tx, rx, Some(target_crackability), Some(self.threshold))
             .await
             .unwrap()
     }
