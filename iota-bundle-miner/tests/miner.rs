@@ -342,3 +342,53 @@ pub async fn test_miner_less_than_max_hash_run() {
         panic!();
     }
 }
+
+#[tokio::test]
+pub async fn test_miner_stop() {
+    let essences =
+        vec!["EDIKZYSKVIWNNTMKWUSXKFMYQVIMBNECNYKBG9YVRKUMXNIXSVAKTIDCAHULLLXR9FSQSDDOFOJWKFACD"];
+    let target_hash =
+        "NNNNNNFAHTZDAMSFMGDCKRWIMMVPVISUYXKTFADURMAEMTNFGBUMODCKQZPMWHUGISUOCWQQL99ZTGCJD";
+    let mut miner = MinerBuilder::new()
+        .with_known_bundle_hashes(vec![])
+        .with_core_thread_count(1)
+        .with_worker_count(5)
+        .with_essences_from_unsigned_bundle(
+            essences
+                .clone()
+                .iter()
+                .map(|t| {
+                    TryteBuf::try_from_str(&(*t).to_string())
+                        .unwrap()
+                        .as_trits()
+                        .encode()
+                })
+                .collect::<Vec<TritBuf<T1B1Buf>>>(),
+        )
+        .with_mining_timeout(20)
+        .finish()
+        .unwrap();
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(2);
+    let tx_cloned = tx.clone();
+
+    tokio::spawn(async move {
+        let event = miner
+            .run_with_with_non_crack_probability_stop_criteria(
+                TryteBuf::try_from_str(&target_hash.to_string())
+                    .unwrap()
+                    .as_trits()
+                    .encode(),
+                EQUAL_TRAGET_HASH,
+            )
+            .await;
+        let _ = tx.send(event).await;
+    });
+
+    let _ = tx_cloned.send(MinerEvent::Timeout).await;
+
+    match rx.recv().await {
+        Some(v) => println!("got = {:?}", v),
+        _ => println!("the sender dropped"),
+    }
+}
