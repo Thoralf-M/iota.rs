@@ -131,8 +131,8 @@ async fn main() -> Result<()> {
             security_level,
             ledger,
             spent_bundle_hashes,
-            5,
-            0,
+            5, // timeout
+            0, // Offset for the obsolete tag, increasing this by 10 million each time one reruns it should be fine
         )
         .await?;
         // use this to abort the mining process
