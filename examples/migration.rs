@@ -4,8 +4,11 @@
 //! cargo run --example migration --release
 use anyhow::Result;
 use iota::{
+    bundle_miner::miner::MinerEvent,
+    bundle_miner::CrackabilityMinerEvent,
     client::migration::{
-        create_migration_bundle, mine, sign_migration_bundle, Address as ChrysalisAddress,
+        create_migration_bundle, mine, sign_migration_bundle, update_essence_with_mined_essence,
+        Address as ChrysalisAddress,
     },
     signing::ternary::seed::Seed as TernarySeed,
     ternary::{T1B1Buf, T3B1Buf, TryteBuf},
@@ -21,9 +24,7 @@ async fn main() -> Result<()> {
     let min_weight_magnitude = 9;
     let ledger = false;
     let mut iota = iota::ClientBuilder::new()
-        .node("https://wallet1.iota.town:443")?
-        .node("https://nodes.iota.org")?
-        .node("https://hanspetzersnode.at:443")?
+        .node("https://nodes.devnet.iota.org")?
         .quorum(true)
         // .permanode("https://permanode.org")?
         .build()?;
@@ -125,16 +126,36 @@ async fn main() -> Result<()> {
     {
         println!("Mining bundle because of spent addresses, this can take some time..."); //40 seconds in this case
                                                                                           // Mine bundle essence
-        let mining_result = mine(
+        let (_sender, mut receiver, abort_handle, bundle_txs) = mine(
             prepared_bundle,
             security_level,
             ledger,
             spent_bundle_hashes,
             5,
+            0,
         )
         .await?;
-        println!("Mining info: {:?}", mining_result.0);
-        prepared_bundle = mining_result.1;
+        // use this to abort the mining process
+        // let _ = _sender.send(MinerEvent::Timeout).await;
+
+        let mined_info = match receiver.recv().await {
+            Some(v) => {
+                println!("got = {:?}", v);
+                abort_handle.abort();
+                match v {
+                    CrackabilityMinerEvent::MinedCrackability(mined_info) => mined_info,
+                    CrackabilityMinerEvent::Timeout(mined_info) => mined_info,
+                }
+            }
+            _ => panic!("the sender dropped"),
+        };
+
+        println!("Mining info: {:?}", mined_info);
+        let updated_bundle = update_essence_with_mined_essence(
+            bundle_txs,
+            mined_info.mined_essence.clone().expect("No essence mined"),
+        )?;
+        prepared_bundle = updated_bundle;
     } else {
         println!("No spent address as input");
     }
